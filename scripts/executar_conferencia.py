@@ -127,9 +127,11 @@ def main():
     print("========================================")
     for r in com_pendencia:
         print()
-        print(f"{r['nome_colaborador']} — {r['nome_empresa']}")
+        print(f"PENDÊNCIAS DE {r['nome_colaborador']} — {r['nome_empresa']}:")
         for p in r["pendencias"]:
             print(f"  - {p}")
+        print()
+        print(r["resumo"])
 
     print()
     print("========================================")
@@ -152,6 +154,17 @@ def main():
         print(f"Empresa (linha {e['_linha']}): {e.get('EMPRESA: (RAZÃO SOCIAL)')!r} / Funcionário: {e.get('NOME COMPLETO DO FUNCIONÁRIO:')!r}")
         for c in prov["candidatos"]:
             print(f"  Candidato (linha {c['_linha']}): empresa={c.get('NOME DA EMPRESA: (RAZAO SOCIAL)')!r} / nome={c.get('NOME COMPLETO:')!r}")
+        if len(prov["candidatos"]) == 1:
+            r = confirmar_admissao({"empresa": e, "funcionario": prov["candidatos"][0]})
+            print()
+            print("  ATENÇÃO: casamento ainda NÃO confirmado — confira se é a mesma empresa/pessoa antes de usar isto.")
+            print()
+            print(r["resumo"])
+            if r["pendencias"]:
+                print()
+                print("  Pendências (se o casamento for confirmado):")
+                for p in r["pendencias"]:
+                    print(f"    - {p}")
 
     print()
     print("========================================")
