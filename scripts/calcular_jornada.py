@@ -61,6 +61,12 @@ _MAPA_ESCALA_DIAS = [
 def _extrair_intervalos_de_hora(texto: str) -> list[tuple[int, int]]:
     """Devolve lista de (minutos_inicio, minutos_fim) — pode ter mais de um se o texto citar mais
     de um horário diferente (isso já é sinal de complexidade, tratado por quem chama)."""
+    return [(i, f) for i, f, _, _ in _extrair_intervalos_com_posicao(texto)]
+
+
+def _extrair_intervalos_com_posicao(texto: str) -> list[tuple[int, int, int, int]]:
+    """Igual à de cima, mas devolve também a posição (início, fim) do match no texto — usado pra
+    olhar o que tem ESCRITO ENTRE dois horários (ex.: a palavra "sexta")."""
     if not texto:
         return []
     intervalos = []
@@ -72,8 +78,42 @@ def _extrair_intervalos_de_hora(texto: str) -> list[tuple[int, int]]:
         except (TypeError, ValueError):
             continue
         if 0 <= inicio < 24 * 60 and 0 <= fim <= 24 * 60:
-            intervalos.append((inicio, fim))
+            intervalos.append((inicio, fim, m.start(), m.end()))
     return intervalos
+
+
+_PADRAO_DIA_ESPECIAL = re.compile(r"\bS[ÁA]BADO\b|\bSEXTA\b|\bSEX\b|\bS[ÁA]B\b", re.IGNORECASE)
+
+
+def _tentar_turno_com_dia_especial(horario_texto: str, dias_semana: int):
+    """
+    Padrão real muito comum nos dados (achado 2026-08-12): "seg a quinta X às Y e sexta W às Z" —
+    um horário de segunda a quinta (ou sábado), outro só na sexta (ou sábado). Isso não é
+    "texto confuso", é um turno normal com um dia diferente — vale a pena calcular, não só desistir.
+
+    Só aceita quando: exatamente 2 horários no texto, existe a palavra "sexta" ou "sábado" ESCRITA
+    ENTRE os dois horários (prova de que o segundo horário é só daquele dia), e 1 dia + o resto bate
+    exatamente com o total de dias da escala. Fora isso, não arrisca — devolve None.
+    """
+    intervalos = _extrair_intervalos_com_posicao(horario_texto)
+    if len(intervalos) != 2:
+        return None
+
+    (i1, f1, _, fim1), (i2, f2, ini2, _) = intervalos
+    entre = horario_texto[fim1:ini2]
+    if not _PADRAO_DIA_ESPECIAL.search(entre):
+        return None
+
+    dias_principal = dias_semana - 1
+    if dias_principal < 1:
+        return None  # escala de 1 dia só não faz sentido pra esse padrão
+
+    return {
+        "duracao_principal": _duracao_minutos(i1, f1),
+        "dias_principal": dias_principal,
+        "duracao_especial": _duracao_minutos(i2, f2),
+        "dias_especial": 1,
+    }
 
 
 def _duracao_minutos(inicio: int, fim: int) -> int:
@@ -186,23 +226,6 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=No
     limite_semanal = limites["limite_semanal"]
     limite_mensal = limites["limite_mensal"]
 
-    intervalos = _extrair_intervalos_de_hora(horario_texto)
-    if len(intervalos) != 1:
-        motivo = (
-            "nenhum horário reconhecido no texto"
-            if not intervalos
-            else f"{len(intervalos)} horários diferentes no texto — escala não é de um turno só"
-        )
-        return {
-            "aplica_checagem": True,
-            "calculado": False,
-            "horas_semanais": None,
-            "horas_mensais": None,
-            "dentro_do_limite": None,
-            "motivo": motivo,
-            "detalhe": f"Horário: {horario_texto!r} / Escala: {escala_texto!r}",
-        }
-
     dias = _dias_por_semana(escala_texto)
     if dias is None:
         return {
@@ -227,33 +250,87 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=No
             "detalhe": f"Horário: {horario_texto!r} / Pausa: {pausa_texto!r} / Escala: {escala_texto!r}",
         }
 
-    inicio, fim = intervalos[0]
-    minutos_dia = _duracao_minutos(inicio, fim) - pausa_min
-    if minutos_dia <= 0:
-        return {
-            "aplica_checagem": True,
-            "calculado": False,
-            "horas_semanais": None,
-            "horas_mensais": None,
-            "dentro_do_limite": None,
-            "motivo": "pausa maior que o turno inteiro — conta não fecha, dado suspeito",
-            "detalhe": f"Horário: {horario_texto!r} / Pausa: {pausa_texto!r}",
-        }
-    if minutos_dia / 60 > LIMITE_SANIDADE_HORAS_DIA:
-        return {
-            "aplica_checagem": True,
-            "calculado": False,
-            "horas_semanais": None,
-            "horas_mensais": None,
-            "dentro_do_limite": None,
-            "motivo": (
-                f"deu {minutos_dia / 60:.1f}h por dia — maior que {LIMITE_SANIDADE_HORAS_DIA}h, "
-                f"sinal de que o texto foi lido errado, não que o turno é assim"
-            ),
-            "detalhe": f"Horário: {horario_texto!r} / Pausa: {pausa_texto!r} / Escala: {escala_texto!r}",
-        }
+    intervalos = _extrair_intervalos_de_hora(horario_texto)
+    minutos_semana = None
+    explicacao_turnos = None
 
-    horas_semanais = round(minutos_dia * dias / 60, 2)
+    if len(intervalos) == 1:
+        inicio, fim = intervalos[0]
+        minutos_dia = _duracao_minutos(inicio, fim) - pausa_min
+        if minutos_dia <= 0:
+            return {
+                "aplica_checagem": True,
+                "calculado": False,
+                "horas_semanais": None,
+                "horas_mensais": None,
+                "dentro_do_limite": None,
+                "motivo": "pausa maior que o turno inteiro — conta não fecha, dado suspeito",
+                "detalhe": f"Horário: {horario_texto!r} / Pausa: {pausa_texto!r}",
+            }
+        if minutos_dia / 60 > LIMITE_SANIDADE_HORAS_DIA:
+            return {
+                "aplica_checagem": True,
+                "calculado": False,
+                "horas_semanais": None,
+                "horas_mensais": None,
+                "dentro_do_limite": None,
+                "motivo": (
+                    f"deu {minutos_dia / 60:.1f}h por dia — maior que {LIMITE_SANIDADE_HORAS_DIA}h, "
+                    f"sinal de que o texto foi lido errado, não que o turno é assim"
+                ),
+                "detalhe": f"Horário: {horario_texto!r} / Pausa: {pausa_texto!r} / Escala: {escala_texto!r}",
+            }
+        minutos_semana = minutos_dia * dias
+        explicacao_turnos = f"{minutos_dia / 60:.2f}h/dia x {dias} dias/semana"
+    else:
+        turno_especial = _tentar_turno_com_dia_especial(horario_texto, dias)
+        if turno_especial is None:
+            motivo = (
+                "nenhum horário reconhecido no texto"
+                if not intervalos
+                else (
+                    f"{len(intervalos)} horários diferentes no texto e não achei um dia especial "
+                    f"claro (ex.: 'e sexta') pra separar — escala não é de um turno só"
+                )
+            )
+            return {
+                "aplica_checagem": True,
+                "calculado": False,
+                "horas_semanais": None,
+                "horas_mensais": None,
+                "dentro_do_limite": None,
+                "motivo": motivo,
+                "detalhe": f"Horário: {horario_texto!r} / Escala: {escala_texto!r}",
+            }
+        min_principal = turno_especial["duracao_principal"] - pausa_min
+        min_especial = turno_especial["duracao_especial"] - pausa_min
+        if min_principal <= 0 or min_especial <= 0:
+            return {
+                "aplica_checagem": True,
+                "calculado": False,
+                "horas_semanais": None,
+                "horas_mensais": None,
+                "dentro_do_limite": None,
+                "motivo": "pausa maior que um dos turnos — conta não fecha, dado suspeito",
+                "detalhe": f"Horário: {horario_texto!r} / Pausa: {pausa_texto!r}",
+            }
+        if min_principal / 60 > LIMITE_SANIDADE_HORAS_DIA or min_especial / 60 > LIMITE_SANIDADE_HORAS_DIA:
+            return {
+                "aplica_checagem": True,
+                "calculado": False,
+                "horas_semanais": None,
+                "horas_mensais": None,
+                "dentro_do_limite": None,
+                "motivo": f"turno acima de {LIMITE_SANIDADE_HORAS_DIA}h/dia — sinal de leitura errada",
+                "detalhe": f"Horário: {horario_texto!r} / Pausa: {pausa_texto!r} / Escala: {escala_texto!r}",
+            }
+        minutos_semana = min_principal * turno_especial["dias_principal"] + min_especial * turno_especial["dias_especial"]
+        explicacao_turnos = (
+            f"{min_principal / 60:.2f}h/dia x {turno_especial['dias_principal']} dias + "
+            f"{min_especial / 60:.2f}h/dia x {turno_especial['dias_especial']} dia especial"
+        )
+
+    horas_semanais = round(minutos_semana / 60, 2)
     horas_mensais = round(horas_semanais * SEMANAS_POR_MES, 2)
     dentro = horas_semanais <= limite_semanal and horas_mensais <= limite_mensal
 
@@ -267,7 +344,7 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=No
         "dentro_do_limite": dentro,
         "motivo": "",
         "detalhe": (
-            f"{minutos_dia / 60:.2f}h/dia x {dias} dias/semana = {horas_semanais}h/semana "
+            f"{explicacao_turnos} = {horas_semanais}h/semana "
             f"(x{SEMANAS_POR_MES} = {horas_mensais}h/mês, limite {limite_semanal}h/{limite_mensal}h) — "
             f"Horário: {horario_texto!r}, Pausa: {pausa_texto!r}, Escala: {escala_texto!r}"
         ),
