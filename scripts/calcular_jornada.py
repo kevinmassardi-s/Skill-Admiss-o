@@ -24,7 +24,20 @@ LIMITE_SEMANAL_HORAS = 44
 LIMITE_MENSAL_HORAS = 220
 # Convenção padrão da CLT: 44h/semana x 5 = 220h/mês. Não é uma conta de calendário (dias do mês
 # variam) — é a referência que a folha de pagamento usa universalmente.
+#
+# IMPORTANTE (pesquisa de 2026-08-12, ver references/base-legal.md): 220h/mês **não é um teto legal
+# independente** — é o divisor de folha (CLT art. 64: salário-hora = salário ÷ 220), derivado do
+# limite semanal. O limite legal de verdade é o semanal (44h, CF art. 7º XIII) e o diário (8h, CLT
+# art. 58, até 10h com compensação). Continuamos comparando contra 220h/mês porque foi pedido
+# explicitamente e é uma referência útil — mas não é a fonte legal primária, é derivada.
 SEMANAS_POR_MES = 5
+
+# Limites por tipo de contrato (pesquisa de 2026-08-12 — ver references/base-legal.md).
+# CLT padrão e "horista" (é só forma de pagamento, não muda o limite) usam 44h/220h.
+LIMITE_ESTAGIO_SEMANAL = 30  # Lei 11.788/2008, art. 10, I — ensino superior/técnico/médio regular.
+LIMITE_ESTAGIO_MENSAL = LIMITE_ESTAGIO_SEMANAL * SEMANAS_POR_MES
+LIMITE_APRENDIZ_DIARIO_HORAS = 6  # Lei 10.097/2000 — 8h só se já concluiu o ensino fundamental
+# (essa exceção não é detectável pelos campos do formulário; assume-se o limite mais restrito).
 
 _PADRAO_HORA = re.compile(
     r"(\d{1,2})[:h.]?(\d{2})?\s*h?\s*(?:as|às|-|à|ate|até)\s*(\d{1,2})[:h.]?(\d{2})?\s*h?",
@@ -102,17 +115,76 @@ def _pausa_minutos(pausa_texto: str) -> int | None:
     return None
 
 
-def calcular_jornada(horario_texto, pausa_texto, escala_texto) -> dict:
+def determinar_limites_por_contrato(contrato_texto, cargo_texto) -> dict:
+    """
+    Achado real (2026-08-12): a planilha tem 221 admissões "INTERMITENTE" e 84 "ESTÁGIO" — tipos que
+    NÃO seguem o limite de 44h/220h do CLT padrão. Ver references/base-legal.md para a pesquisa
+    completa (5 fontes: CLT padrão, estágio, intermitente/horista, tempo parcial, aprendiz/teletrabalho).
+
+    Devolve: aplica_checagem (bool), limite_semanal, limite_mensal, motivo_isento (str, se não aplica).
+    """
+    contrato = str(contrato_texto or "").upper()
+    cargo = str(cargo_texto or "").upper()
+
+    if "INTERMITENTE" in contrato:
+        return {
+            "aplica_checagem": False,
+            "limite_semanal": None,
+            "limite_mensal": None,
+            "motivo_isento": (
+                "contrato intermitente não tem teto legal de jornada agregada (CLT art. 452-A é "
+                "silencioso quanto a isso — a jornada varia por convocação, não é fixa)"
+            ),
+        }
+
+    if "ESTÁGIO" in contrato or "ESTAGIO" in contrato:
+        if "APRENDIZ" in cargo:
+            # Menor aprendiz: 6h/dia é o limite direto (Lei 10.097/2000), não um limite semanal — mas
+            # convertido pra semana de 5 dias pra manter a mesma lógica de cálculo.
+            limite_semanal = LIMITE_APRENDIZ_DIARIO_HORAS * SEMANAS_POR_MES / 1  # 6h x 5 dias = 30h
+        else:
+            limite_semanal = LIMITE_ESTAGIO_SEMANAL
+        return {
+            "aplica_checagem": True,
+            "limite_semanal": limite_semanal,
+            "limite_mensal": limite_semanal * SEMANAS_POR_MES,
+            "motivo_isento": "",
+        }
+
+    return {
+        "aplica_checagem": True,
+        "limite_semanal": LIMITE_SEMANAL_HORAS,
+        "limite_mensal": LIMITE_MENSAL_HORAS,
+        "motivo_isento": "",
+    }
+
+
+def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=None, cargo_texto=None) -> dict:
     """
     Devolve:
+      aplica_checagem: bool — False pra contratos sem teto de jornada (ex.: intermitente)
       calculado: bool — se deu pra calcular com confiança
       horas_semanais, horas_mensais: float | None
       dentro_do_limite: bool | None
-      motivo: str — por que não deu pra calcular, quando for o caso
+      motivo: str — por que não deu pra calcular, ou por que não se aplica
       detalhe: str — como o número foi montado, pra Kevin conferir a conta
     """
     horario_texto = str(horario_texto or "")
     escala_texto = str(escala_texto or "")
+
+    limites = determinar_limites_por_contrato(contrato_texto, cargo_texto)
+    if not limites["aplica_checagem"]:
+        return {
+            "aplica_checagem": False,
+            "calculado": False,
+            "horas_semanais": None,
+            "horas_mensais": None,
+            "dentro_do_limite": None,
+            "motivo": limites["motivo_isento"],
+            "detalhe": f"Contrato: {contrato_texto!r}",
+        }
+    limite_semanal = limites["limite_semanal"]
+    limite_mensal = limites["limite_mensal"]
 
     intervalos = _extrair_intervalos_de_hora(horario_texto)
     if len(intervalos) != 1:
@@ -122,6 +194,7 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto) -> dict:
             else f"{len(intervalos)} horários diferentes no texto — escala não é de um turno só"
         )
         return {
+            "aplica_checagem": True,
             "calculado": False,
             "horas_semanais": None,
             "horas_mensais": None,
@@ -133,6 +206,7 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto) -> dict:
     dias = _dias_por_semana(escala_texto)
     if dias is None:
         return {
+            "aplica_checagem": True,
             "calculado": False,
             "horas_semanais": None,
             "horas_mensais": None,
@@ -144,6 +218,7 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto) -> dict:
     pausa_min = _pausa_minutos(pausa_texto)
     if pausa_min is None:
         return {
+            "aplica_checagem": True,
             "calculado": False,
             "horas_semanais": None,
             "horas_mensais": None,
@@ -156,6 +231,7 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto) -> dict:
     minutos_dia = _duracao_minutos(inicio, fim) - pausa_min
     if minutos_dia <= 0:
         return {
+            "aplica_checagem": True,
             "calculado": False,
             "horas_semanais": None,
             "horas_mensais": None,
@@ -165,6 +241,7 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto) -> dict:
         }
     if minutos_dia / 60 > LIMITE_SANIDADE_HORAS_DIA:
         return {
+            "aplica_checagem": True,
             "calculado": False,
             "horas_semanais": None,
             "horas_mensais": None,
@@ -178,17 +255,20 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto) -> dict:
 
     horas_semanais = round(minutos_dia * dias / 60, 2)
     horas_mensais = round(horas_semanais * SEMANAS_POR_MES, 2)
-    dentro = horas_semanais <= LIMITE_SEMANAL_HORAS and horas_mensais <= LIMITE_MENSAL_HORAS
+    dentro = horas_semanais <= limite_semanal and horas_mensais <= limite_mensal
 
     return {
+        "aplica_checagem": True,
         "calculado": True,
         "horas_semanais": horas_semanais,
         "horas_mensais": horas_mensais,
+        "limite_semanal": limite_semanal,
+        "limite_mensal": limite_mensal,
         "dentro_do_limite": dentro,
         "motivo": "",
         "detalhe": (
             f"{minutos_dia / 60:.2f}h/dia x {dias} dias/semana = {horas_semanais}h/semana "
-            f"(x{SEMANAS_POR_MES} = {horas_mensais}h/mês) — Horário: {horario_texto!r}, "
-            f"Pausa: {pausa_texto!r}, Escala: {escala_texto!r}"
+            f"(x{SEMANAS_POR_MES} = {horas_mensais}h/mês, limite {limite_semanal}h/{limite_mensal}h) — "
+            f"Horário: {horario_texto!r}, Pausa: {pausa_texto!r}, Escala: {escala_texto!r}"
         ),
     }

@@ -75,3 +75,64 @@ Fonte: leiaute S-2200 ([Senior](https://documentacao.senior.com.br/gestao-de-pes
 
 Fonte: [Domínio — Como completar cadastro de Colaborador? (código 9954)](https://suporte.dominioatendimento.com/central/faces/solucao.html?codigo=9954),
 [Domínio — Erro 1, campo obrigatório Município (código 4623)](https://suporte.dominioatendimento.com/central/faces/solucao.html?codigo=4623).
+
+## Jornada de trabalho por tipo de contrato — pesquisa de 2026-08-12
+
+Pedido do Kevin: conferir automaticamente se a jornada está dentro de 44h semanais / 220h mensais,
+sempre alertando quando não estiver. Antes de implementar, pesquisei (5 agentes em paralelo) se esse
+limite vale igual pra todo tipo de contrato — não vale. Achado real na planilha: **221 admissões
+"INTERMITENTE" e 84 "ESTÁGIO"** (mais casos de "aprendiz" dentro do contrato ESTÁGIO, identificáveis
+só pelo texto do cargo) — todas seriam julgadas erradas pelo limite padrão.
+
+**220h/mês não é um teto legal independente.** É o divisor de folha (CLT art. 64: salário-hora =
+salário ÷ 220), derivado de 44h/semana × 5. O limite legal de verdade é o semanal (44h, CF art. 7º,
+XIII) e o diário (8h, CLT art. 58, até 10h com compensação — banco de horas até 6 meses por acordo
+individual, até 1 ano por acordo/convenção coletiva, CLT art. 59 e 59-A). Continuamos comparando
+contra 220h/mês porque foi pedido e é referência útil, mas registrando aqui que não é a fonte legal
+primária.
+Fontes: CF art. 7º XIII; CLT art. 58, 59, 59-A, 64;
+[AMATRA4 — o divisor 220](https://www.amatra4.org.br/artigos-2/artigos/o-divisor-220-e-o-limite-mensal-de-horas-trabalhadas/);
+[Conjur — prorrogação, compensação e banco de horas](https://conjur.com.br/2024-fev-08/jornada-de-trabalho-prorrogacao-compensacao-e-banco-de-horas/).
+
+**Estágio (Lei 11.788/2008, art. 10): 30h semanais** (ensino superior, técnico ou médio regular) ou
+**20h semanais** (educação especial / EJA fundamental) — nunca 44h. Hora extra e banco de horas são
+**proibidos em qualquer hipótese**; extrapolar o limite descaracteriza o estágio em vínculo
+empregatício. A skill usa 30h/150h como padrão (não dá pra distinguir a modalidade de 20h pelos campos
+do formulário — limitação conhecida, registrada aqui).
+Fonte: [Lei 11.788/2008, art. 10](https://www.jusbrasil.com.br/legislacao/93117/lei-do-estagio-lei-11788-08).
+
+**Menor aprendiz (Lei 10.097/2000): 6h diárias**, ou até 8h se já concluiu o ensino fundamental
+(exceção não detectável pelos campos do formulário — usa-se o limite mais restrito). **Proibida
+prorrogação e compensação de jornada em qualquer hipótese.** Nesta planilha, aprendiz não tem um
+`CONTRATO:` próprio — aparece com `CONTRATO: ESTÁGIO` e a palavra "aprendiz" só no texto do `CARGO:`
+(ex.: "JOVEM APRENDIZ - VENDEDOR", "AUXILIAR DE VENDAS APRENDIZ"). A skill detecta isso pelo texto do
+cargo e aplica 6h/dia (30h/semana) em vez de 30h padrão do estágio comum — que dão o mesmo número por
+coincidência (6h × 5 = 30h), mas a regra de "nunca hora extra" é checada à parte, direto nos campos de
+acordo de compensação/prorrogação.
+Fonte: [Lei 10.097/2000](https://www2.camara.leg.br/legin/fed/lei/2000/lei-10097-19-dezembro-2000-365495-publicacaooriginal-1-pl.html).
+
+**Trabalho intermitente (CLT art. 452-A): sem teto legal de jornada agregada.** A lei regula a forma
+de convocação (mínimo 3 dias corridos de antecedência, resposta em 1 dia útil) e a remuneração mínima
+por hora, mas é silenciosa quanto a um limite semanal/mensal total — o total de horas no mês varia
+conforme quantas convocações o trabalhador aceita. Aplicar 44h/220h aqui gera falso positivo. A skill
+**não faz a checagem de jornada** pra esse tipo de contrato — nem "dentro" nem "acima", simplesmente
+não se aplica.
+Fonte: [CLT art. 452-A](https://www.jusbrasil.com.br/topicos/173000167/artigo-452a-do-decreto-lei-n-5452-de-01-de-maio-de-1943);
+Portaria MTP nº 671/2021.
+
+**Horista** é forma de remuneração (pago por hora), não um tipo de contrato à parte — segue o limite
+normal de 44h/220h do CLT comum. Nenhuma regra especial necessária.
+Fonte: [Pontotel — horista](https://www.pontotel.com.br/horista/).
+
+**Tempo parcial (CLT art. 58-A): 30h/semana sem hora extra, ou 26h/semana com até 6h extras** (150h ou
+130h/mês, respectivamente) — **não é detectável pelos campos do formulário desta planilha** (não existe
+uma marcação "regime parcial", precisaria vir de um campo dedicado que a empresa preenche). Limitação
+conhecida, não implementada — se aparecer um caso real que dependa disso, registrar aqui.
+Fonte: [CLT art. 58-A](https://modeloinicial.com.br/lei/CLT/consolidacao-leis-trabalho/art-58a).
+
+**Teletrabalho sem controle de jornada (CLT art. 62, III e art. 75-B §3º)**: fica fora do capítulo de
+duração do trabalho — campo de horário vazio ou genérico é esperado, não é dado faltando, **desde que**
+não haja controle de horário pelo empregador (ponto eletrônico, exigência de login em horário fixo). Se
+houver controle, as regras normais (44h/220h) voltam a valer. **Não implementado** — o formulário não
+tem um campo que diga "é teletrabalho com/sem controle de jornada"; limitação conhecida.
+Fonte: [Conjur — home office e horas extras](https://conjur.com.br/2025-out-24/trabalho-em-home-office-e-o-direito-as-horas-extras/).

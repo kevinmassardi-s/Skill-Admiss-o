@@ -133,20 +133,43 @@ def confirmar_admissao(par: dict) -> dict:
             f"(conferir na planilha): '{f.get(COL_FUNC_PIS)}'"
         )
 
-    # --- Jornada: 44h semanais / 220h mensais (pedido do Kevin, 2026-08-12) ---
+    # --- Jornada: limite varia por tipo de contrato (pesquisa de 2026-08-12, ver base-legal.md) ---
     jornada = calcular_jornada(
-        e.get(COL_EMPRESA_HORARIO), e.get(COL_EMPRESA_PAUSA), e.get(COL_EMPRESA_ESCALA)
+        e.get(COL_EMPRESA_HORARIO),
+        e.get(COL_EMPRESA_PAUSA),
+        e.get(COL_EMPRESA_ESCALA),
+        contrato_texto=e.get(COL_EMPRESA_CONTRATO),
+        cargo_texto=e.get(COL_EMPRESA_CARGO),
     )
-    if not jornada["calculado"]:
+    if not jornada["aplica_checagem"]:
+        pass  # ex.: intermitente — sem teto legal de jornada, não é pendência nem "dentro do limite"
+    elif not jornada["calculado"]:
+        limite_txt = (
+            f"{jornada.get('limite_semanal')}h/{jornada.get('limite_mensal')}h"
+            if jornada.get("limite_semanal") is not None
+            else "44h/220h"
+        )
         pendencias.append(
             f"Jornada: não deu pra calcular automaticamente ({jornada['motivo']}) — confira "
-            f"manualmente se está dentro de 44h semanais / 220h mensais. {jornada['detalhe']}"
+            f"manualmente se está dentro do limite ({limite_txt}). {jornada['detalhe']}"
         )
     elif not jornada["dentro_do_limite"]:
         pendencias.append(
             f"Jornada ACIMA DO LIMITE: {jornada['horas_semanais']}h/semana, "
-            f"{jornada['horas_mensais']}h/mês (limite 44h/220h). {jornada['detalhe']}"
+            f"{jornada['horas_mensais']}h/mês (limite {jornada['limite_semanal']}h/"
+            f"{jornada['limite_mensal']}h). {jornada['detalhe']}"
         )
+
+    # Aprendiz: hora extra/compensação é proibida em qualquer hipótese (Lei 10.097/2000) — checagem
+    # direta nos campos que já existem, independente de ter dado pra calcular a jornada ou não.
+    if "APRENDIZ" in str(e.get(COL_EMPRESA_CARGO) or "").upper():
+        tem_compensacao = str(e.get(COL_EMPRESA_COMPENSACAO) or "").strip().upper() == "SIM"
+        tem_prorrogacao = str(e.get(COL_EMPRESA_PRORROGACAO) or "").strip().upper() == "SIM"
+        if tem_compensacao or tem_prorrogacao:
+            pendencias.append(
+                "Aprendiz com acordo de compensação/prorrogação de horas marcado — isso é proibido "
+                "por lei pra aprendiz (Lei 10.097/2000), não pode ser lançado assim"
+            )
 
     nome_colaborador = f.get(COL_FUNC_NOME)
     nome_empresa = e.get(COL_EMPRESA_NOME)
@@ -166,10 +189,16 @@ def confirmar_admissao(par: dict) -> dict:
         f"Contrato: {e.get(COL_EMPRESA_CONTRATO)}",
         f"Horário de trabalho: {e.get(COL_EMPRESA_HORARIO)}"
         + (
-            f" -> {jornada['horas_semanais']}h/semana, {jornada['horas_mensais']}h/mês "
-            f"({'DENTRO' if jornada['dentro_do_limite'] else 'ACIMA'} do limite 44h/220h)"
-            if jornada["calculado"]
-            else f" -> não calculado automaticamente ({jornada['motivo']}), CONFERIR À MÃO"
+            f" -> contrato {e.get(COL_EMPRESA_CONTRATO)}: sem teto legal de jornada agregada, "
+            f"não conferido ({jornada['motivo']})"
+            if not jornada["aplica_checagem"]
+            else (
+                f" -> {jornada['horas_semanais']}h/semana, {jornada['horas_mensais']}h/mês "
+                f"({'DENTRO' if jornada['dentro_do_limite'] else 'ACIMA'} do limite "
+                f"{jornada['limite_semanal']}h/{jornada['limite_mensal']}h)"
+                if jornada["calculado"]
+                else f" -> não calculado automaticamente ({jornada['motivo']}), CONFERIR À MÃO"
+            )
         ),
         f"Pausa refeição: {e.get(COL_EMPRESA_PAUSA)}",
         f"Escala: {e.get(COL_EMPRESA_ESCALA)}",
