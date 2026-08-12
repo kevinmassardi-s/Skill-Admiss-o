@@ -105,3 +105,11 @@ linha do funcionário", não em "a row do DataFrame". Ao entregar o relatório, 
 está pronto do que está pendente: prometer "50 prontas" quando 8 têm documento faltando quebra a
 confiança na próxima rodada. Se aparecer um caso que as regras aqui não cobrem, pare e pergunte antes
 de decidir sozinho — é assim que uma regra nova entra neste arquivo.
+
+**Sempre cole o resumo bruto de `scripts/executar_conferencia.py`, nunca parafraseie.** Achado real
+(2026-08-12): descrever em texto corrido "os documentos X, Y e Z estão presentes" parece equivalente,
+mas Kevin não consegue clicar em prosa — ele precisa do link de verdade, em formato clicável, pra abrir
+o documento. O mesmo vale pra todos os outros campos (cargo, salário, horário, CPF/PIS): cole o bloco
+`=== Nome — Empresa ===` inteiro, como o script gerou, em vez de resumir o que tem nele. Isso vale pra
+prontas, pendências e prováveis — qualquer admissão que o Kevin for trabalhar precisa do bloco
+completo, não de um resumo do resumo.
