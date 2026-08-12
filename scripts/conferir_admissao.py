@@ -193,7 +193,8 @@ def confirmar_admissao(par: dict) -> dict:
             f"não conferido ({jornada['motivo']})"
             if not jornada["aplica_checagem"]
             else (
-                f" -> {jornada['horas_semanais']}h/semana, {jornada['horas_mensais']}h/mês "
+                f" -> {jornada['explicacao_turnos']} = {jornada['horas_semanais']}h/semana, "
+                f"{jornada['horas_mensais']}h/mês "
                 f"({'DENTRO' if jornada['dentro_do_limite'] else 'ACIMA'} do limite "
                 f"{jornada['limite_semanal']}h/{jornada['limite_mensal']}h)"
                 if jornada["calculado"]

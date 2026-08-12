@@ -109,8 +109,12 @@ def _tentar_turno_com_dia_especial(horario_texto: str, dias_semana: int):
         return None  # escala de 1 dia só não faz sentido pra esse padrão
 
     return {
+        "inicio_principal": i1,
+        "fim_principal": f1,
         "duracao_principal": _duracao_minutos(i1, f1),
         "dias_principal": dias_principal,
+        "inicio_especial": i2,
+        "fim_especial": f2,
         "duracao_especial": _duracao_minutos(i2, f2),
         "dias_especial": 1,
     }
@@ -122,6 +126,10 @@ def _duracao_minutos(inicio: int, fim: int) -> int:
     if duracao <= 0:
         duracao += 24 * 60
     return duracao
+
+
+def _fmt_hora(minutos: int) -> str:
+    return f"{(minutos // 60) % 24:02d}:{minutos % 60:02d}"
 
 
 def _dias_por_semana(escala_texto: str) -> int | None:
@@ -281,7 +289,10 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=No
                 "detalhe": f"Horário: {horario_texto!r} / Pausa: {pausa_texto!r} / Escala: {escala_texto!r}",
             }
         minutos_semana = minutos_dia * dias
-        explicacao_turnos = f"{minutos_dia / 60:.2f}h/dia x {dias} dias/semana"
+        explicacao_turnos = (
+            f"{_fmt_hora(inicio)} às {_fmt_hora(fim)} ({minutos_dia / 60:.2f}h/dia, já descontada a "
+            f"pausa) x {dias} dias/semana"
+        )
     else:
         turno_especial = _tentar_turno_com_dia_especial(horario_texto, dias)
         if turno_especial is None:
@@ -326,8 +337,10 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=No
             }
         minutos_semana = min_principal * turno_especial["dias_principal"] + min_especial * turno_especial["dias_especial"]
         explicacao_turnos = (
-            f"{min_principal / 60:.2f}h/dia x {turno_especial['dias_principal']} dias + "
-            f"{min_especial / 60:.2f}h/dia x {turno_especial['dias_especial']} dia especial"
+            f"{_fmt_hora(turno_especial['inicio_principal'])} às {_fmt_hora(turno_especial['fim_principal'])} "
+            f"({min_principal / 60:.2f}h/dia) x {turno_especial['dias_principal']} dias + "
+            f"{_fmt_hora(turno_especial['inicio_especial'])} às {_fmt_hora(turno_especial['fim_especial'])} "
+            f"({min_especial / 60:.2f}h/dia) x {turno_especial['dias_especial']} dia especial"
         )
 
     horas_semanais = round(minutos_semana / 60, 2)
@@ -343,6 +356,7 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=No
         "limite_mensal": limite_mensal,
         "dentro_do_limite": dentro,
         "motivo": "",
+        "explicacao_turnos": explicacao_turnos,
         "detalhe": (
             f"{explicacao_turnos} = {horas_semanais}h/semana "
             f"(x{SEMANAS_POR_MES} = {horas_mensais}h/mês, limite {limite_semanal}h/{limite_mensal}h) — "
