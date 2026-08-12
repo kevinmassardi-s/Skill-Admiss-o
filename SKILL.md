@@ -106,10 +106,16 @@ está pronto do que está pendente: prometer "50 prontas" quando 8 têm document
 confiança na próxima rodada. Se aparecer um caso que as regras aqui não cobrem, pare e pergunte antes
 de decidir sozinho — é assim que uma regra nova entra neste arquivo.
 
-**Sempre cole o resumo bruto de `scripts/executar_conferencia.py`, nunca parafraseie.** Achado real
-(2026-08-12): descrever em texto corrido "os documentos X, Y e Z estão presentes" parece equivalente,
-mas Kevin não consegue clicar em prosa — ele precisa do link de verdade, em formato clicável, pra abrir
-o documento. O mesmo vale pra todos os outros campos (cargo, salário, horário, CPF/PIS): cole o bloco
-`=== Nome — Empresa ===` inteiro, como o script gerou, em vez de resumir o que tem nele. Isso vale pra
-prontas, pendências e prováveis — qualquer admissão que o Kevin for trabalhar precisa do bloco
-completo, não de um resumo do resumo.
+**Sempre traga todos os dados do resumo de `scripts/executar_conferencia.py`, nunca parafraseie.**
+Achado real (2026-08-12): descrever em texto corrido "os documentos X, Y e Z estão presentes" parece
+equivalente, mas Kevin não consegue clicar em prosa. O mesmo vale pra todos os outros campos (cargo,
+salário, horário, CPF/PIS): traga tudo que está no bloco `=== Nome — Empresa ===`, em vez de resumir o
+que tem nele. Isso vale pra prontas, pendências e prováveis — qualquer admissão que o Kevin for
+trabalhar precisa do conteúdo completo, não de um resumo do resumo.
+
+**Os links de documento têm que ficar clicáveis, não só copiáveis.** Segundo achado real, mesmo dia:
+colar o resumo dentro de um bloco de código (` ``` `) imprime o link como texto puro — dá pra copiar,
+não dá pra clicar. Formate cada documento como link markdown de verdade:
+`[RG - frente e verso](https://drive.google.com/open?id=...)`, um por linha, **fora** de bloco de
+código. Só o valor do PIS/CPF reconstruído ou uma pendência pontual pode ficar em code-inline
+(` `texto` `) — links de documento, nunca.
