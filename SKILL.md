@@ -35,11 +35,14 @@ diferente, nome social vs. civil, homônimos entre clientes diferentes. Quando h
 candidato plausível, ou nenhum, a skill apresenta as opções e pergunta — nunca escolhe sozinha. Ver
 `references/casamento-empresa-funcionario.md`.
 
-**Não calcular o que exige leitura de texto livre.** O horário de trabalho vem como frase solta
-("Segunda a quinta 08:00 às 18:00, sexta até 17:00") e precisa respeitar o teto de 220h semanais. Essa
-conta continua com Kevin — tentar somar automaticamente a partir de texto livre arrisca inventar um
-número errado com aparência de certo. A skill mostra o horário em destaque para conferência, não
-calcula a soma.
+**A jornada é calculada automaticamente, mas nunca escondendo o texto original.** Pedido do Kevin
+(2026-08-12): conferir sozinho se a jornada está dentro de 44h semanais / 220h mensais, e sempre
+alertar quando não estiver. O horário vem como frase solta ("Segunda a quinta 08:00 às 18:00, sexta
+até 17:00") — interpretar isso automaticamente tem risco real de errar com aparência de certo, então a
+mitigação é: **sempre mostrar o texto original ao lado do número calculado**, e quando o texto não
+seguir um padrão reconhecido com confiança (mais de um horário, escala irregular como 12x36, pausa
+sem formato claro), a skill **não inventa um número** — vira pendência de "não consegui calcular,
+confira manualmente", que também conta como alerta. Ver `scripts/calcular_jornada.py`.
 
 **Documento faltando é pendência, não suposição.** Se um link de documento está vazio, a skill relata
 "faltando" e diz qual. Nunca assume que "provavelmente foi enviado por fora" ou que não é necessário.

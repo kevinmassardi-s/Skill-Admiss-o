@@ -13,6 +13,8 @@ comparar entre admissões).
 
 from __future__ import annotations
 
+from calcular_jornada import calcular_jornada
+
 # Nomes exatos das colunas, conforme references/estrutura-planilha.md.
 COL_EMPRESA_CARGO = "CARGO:"
 COL_EMPRESA_DATA_ADMISSAO = "DATA DE ADMISSÃO:"
@@ -131,6 +133,21 @@ def confirmar_admissao(par: dict) -> dict:
             f"(conferir na planilha): '{f.get(COL_FUNC_PIS)}'"
         )
 
+    # --- Jornada: 44h semanais / 220h mensais (pedido do Kevin, 2026-08-12) ---
+    jornada = calcular_jornada(
+        e.get(COL_EMPRESA_HORARIO), e.get(COL_EMPRESA_PAUSA), e.get(COL_EMPRESA_ESCALA)
+    )
+    if not jornada["calculado"]:
+        pendencias.append(
+            f"Jornada: não deu pra calcular automaticamente ({jornada['motivo']}) — confira "
+            f"manualmente se está dentro de 44h semanais / 220h mensais. {jornada['detalhe']}"
+        )
+    elif not jornada["dentro_do_limite"]:
+        pendencias.append(
+            f"Jornada ACIMA DO LIMITE: {jornada['horas_semanais']}h/semana, "
+            f"{jornada['horas_mensais']}h/mês (limite 44h/220h). {jornada['detalhe']}"
+        )
+
     nome_colaborador = f.get(COL_FUNC_NOME)
     nome_empresa = e.get(COL_EMPRESA_NOME)
 
@@ -147,7 +164,13 @@ def confirmar_admissao(par: dict) -> dict:
         f"Data de admissão: {e.get(COL_EMPRESA_DATA_ADMISSAO)}",
         f"Salário: {e.get(COL_EMPRESA_SALARIO)}",
         f"Contrato: {e.get(COL_EMPRESA_CONTRATO)}",
-        f"Horário de trabalho (CONFERIR 220h/semana à mão): {e.get(COL_EMPRESA_HORARIO)}",
+        f"Horário de trabalho: {e.get(COL_EMPRESA_HORARIO)}"
+        + (
+            f" -> {jornada['horas_semanais']}h/semana, {jornada['horas_mensais']}h/mês "
+            f"({'DENTRO' if jornada['dentro_do_limite'] else 'ACIMA'} do limite 44h/220h)"
+            if jornada["calculado"]
+            else f" -> não calculado automaticamente ({jornada['motivo']}), CONFERIR À MÃO"
+        ),
         f"Pausa refeição: {e.get(COL_EMPRESA_PAUSA)}",
         f"Escala: {e.get(COL_EMPRESA_ESCALA)}",
         f"VT (desconto 6%): {e.get(COL_EMPRESA_VT)}",
