@@ -8,8 +8,10 @@ description: >
   processo no Acessórias. Use sempre que aparecer "admissão", "admitir colaborador", "novo
   funcionário", "cadastro de admissão", "FORMULÁRIO DE ADMISSÃO", ficha de admissão, ou quando a
   pessoa mencionar casar a aba EMPRESA com a aba FUNCIONARIO, conferir documentos de admissão, ou
-  preparar o cadastro para lançar no Domínio. Não cobre RPA/prestador de serviço (processo à parte,
-  fora de escopo) nem o exame admissional (ASO).
+  preparar o cadastro para lançar no Domínio. Também cobre a fila de "auditoria" (admissões com status
+  EM AUDITORIA na planilha — acione com "--modo auditoria" quando a pessoa pedir pra conferir as que
+  estão em auditoria). Não cobre RPA/prestador de serviço (processo à parte, fora de escopo) nem o
+  exame admissional (ASO).
 ---
 
 # Cadastro de admissão (CLT)
@@ -62,6 +64,15 @@ Rodar tudo de uma vez (script de entrada):
 
 ```
 python scripts/executar_conferencia.py --caminho "C:\...\FORMULÁRIO DE ADMISSÃO - EXTERNO.xlsx"
+```
+
+**Dois modos** (pedido do Kevin, 2026-08-12) — mesma esteira, muda só qual fatia da planilha entra:
+
+```
+--modo aberto      (padrão) admissões ativas, dentro do corte de data — o dia a dia.
+--modo auditoria    só as linhas com status "EM AUDITORIA", em qualquer competência (sem corte de
+                     data — é uma fila separada, não "o que é novo"). Use quando Kevin pedir pra
+                     conferir "as que estão em auditoria".
 ```
 
 Precisa de Python com `openpyxl` instalado (`pip install openpyxl`) — já configurado nesta máquina em

@@ -14,6 +14,13 @@ Uso:
     cujo "Carimbo de data/hora" é dessa data em diante. O backlog antigo (registros sem status de
     conclusão, mas de antes do corte) fica de fora — é tratado à parte, não por esta rotina.
 
+--modo aberto|auditoria (padrão: aberto) : pedido do Kevin (2026-08-12) — mesma esteira (leitura,
+    casamento, conferência, jornada), só troca qual fatia da planilha entra:
+      aberto     -> o de sempre: status ativo (não concluído/cancelado/etc.) e dentro do corte de data.
+      auditoria  -> só as linhas com status exatamente "EM AUDITORIA", em QUALQUER data (esse recorte
+                    não tem corte de data — é uma fila separada, não "o que é novo"). Ignora
+                    --incluir-todos-status e --data-corte quando ativo.
+
 Reescrita em Python (2026-08-11) no lugar da versão PowerShell original — mesma lógica de negócio,
 ~14x mais rápido no mesmo arquivo real (~60s -> ~4-8s).
 """
@@ -56,18 +63,30 @@ def main():
     parser.add_argument("--caminho", required=True)
     parser.add_argument("--incluir-todos-status", action="store_true")
     parser.add_argument("--data-corte", default="2026-08-11")
+    parser.add_argument("--modo", choices=["aberto", "auditoria"], default="aberto")
     args = parser.parse_args()
 
     data_corte = datetime.strptime(args.data_corte, "%Y-%m-%d").date()
 
-    print(f"Lendo {args.caminho} ...")
-    dados = ler_planilha_admissao(args.caminho)
+    print(f"Lendo {args.caminho} ... (modo: {args.modo})")
+    # Modo auditoria não tem corte de data — um item em auditoria pode ser bem mais antigo que as
+    # últimas 600 linhas (a otimização de performance normal). Lê a aba inteira nesse modo.
+    somente_ultimas_n_linhas = 0 if args.modo == "auditoria" else 600
+    dados = ler_planilha_admissao(args.caminho, somente_ultimas_n_linhas=somente_ultimas_n_linhas)
     print(f"  EMPRESA: {len(dados['empresa'])} linhas | FUNCIONARIO: {len(dados['funcionario'])} linhas")
 
     empresa_para_processar = dados["empresa"]
     funcionario_para_processar = dados["funcionario"]
 
-    if not args.incluir_todos_status:
+    if args.modo == "auditoria":
+        antes = len(empresa_para_processar)
+        empresa_para_processar = [
+            e for e in empresa_para_processar
+            if str(e.get(COL_STATUS_EMPRESA) or "").strip().upper() == "EM AUDITORIA"
+        ]
+        print(f"  MODO AUDITORIA: {len(empresa_para_processar)} de {antes} linha(s) da EMPRESA "
+              f"marcadas 'EM AUDITORIA' (sem corte de data — mostra qualquer competência).")
+    elif not args.incluir_todos_status:
         # Só a EMPRESA é filtrada por status: é a aba que Kevin usa como referência de "feito ou não".
         # A FUNCIONARIO é casada por inteiro (sem filtro de status próprio) — ver
         # references/estrutura-planilha.md sobre por que não confiamos no FEITO? da aba FUNCIONARIO.
