@@ -193,12 +193,20 @@ def confirmar_admissao(par: dict) -> dict:
             f"não conferido ({jornada['motivo']})"
             if not jornada["aplica_checagem"]
             else (
-                f" -> {jornada['explicacao_turnos']} = {jornada['horas_semanais']}h/semana, "
-                f"{jornada['horas_mensais']}h/mês "
-                f"({'DENTRO' if jornada['dentro_do_limite'] else 'ACIMA'} do limite "
-                f"{jornada['limite_semanal']}h/{jornada['limite_mensal']}h)"
-                if jornada["calculado"]
-                else f" -> não calculado automaticamente ({jornada['motivo']}), CONFERIR À MÃO"
+                # 12x36: não é "some e compare com teto" — o próprio explicacao_turnos já diz se o
+                # plantão confere com o padrão. Achado real (2026-08-20): mostrar "192.5h/mês (DENTRO
+                # do limite 180h)" parece contraditório (192,5 > 180), porque 180h é o divisor de
+                # folha, não um teto — ver calcular_jornada.py.
+                f" -> {jornada['explicacao_turnos']}"
+                if jornada["calculado"] and "plantão 12h" in jornada.get("explicacao_turnos", "")
+                else (
+                    f" -> {jornada['explicacao_turnos']} = {jornada['horas_semanais']}h/semana, "
+                    f"{jornada['horas_mensais']}h/mês "
+                    f"({'DENTRO' if jornada['dentro_do_limite'] else 'ACIMA'} do limite "
+                    f"{jornada['limite_semanal']}h/{jornada['limite_mensal']}h)"
+                    if jornada["calculado"]
+                    else f" -> não calculado automaticamente ({jornada['motivo']}), CONFERIR À MÃO"
+                )
             )
         ),
         f"Pausa refeição: {e.get(COL_EMPRESA_PAUSA)}",

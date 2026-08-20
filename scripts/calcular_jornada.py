@@ -39,6 +39,18 @@ LIMITE_ESTAGIO_MENSAL = LIMITE_ESTAGIO_SEMANAL * SEMANAS_POR_MES
 LIMITE_APRENDIZ_DIARIO_HORAS = 6  # Lei 10.097/2000 — 8h só se já concluiu o ensino fundamental
 # (essa exceção não é detectável pelos campos do formulário; assume-se o limite mais restrito).
 
+# 12x36 (CLT art. 59-A): ciclo de 48h (12h trabalho + 36h folga) — a semana varia entre 4 plantões
+# (44h) e 3 plantões (33h), média de 3,5 plantões/semana. Cada plantão são 12h de presença menos 1h
+# de intervalo obrigatório = 11h efetivas. Guia de referência trazido pelo Kevin (2026-08-20, fonte:
+# documento gerado por outra IA a partir do art. 59-A da CLT e Súmula do TST — não pesquisado por
+# fonte oficial própria desta vez, registrado aqui pra rastreabilidade).
+#   Horas semana (média) = 3,5 x 11h = 38,5h
+#   Horas mês (padrão de cadastro em sistema de folha, divisor da categoria) = 180h
+# Como 3,5 já é a média do ciclo completo, não precisa de lógica extra: cai na mesma fórmula de
+# "minutos_dia x dias" que os outros casos usam — só o número de dias/semana é 3,5 em vez de inteiro.
+LIMITE_12X36_SEMANAL = 38.5
+LIMITE_12X36_MENSAL = 180
+
 _PADRAO_HORA = re.compile(
     r"(\d{1,2})[:h.]?(\d{2})?\s*h?\s*(?:as|às|-|à|ate|até)\s*(\d{1,2})[:h.]?(\d{2})?\s*h?",
     re.IGNORECASE,
@@ -55,7 +67,10 @@ _MAPA_ESCALA_DIAS = [
     (re.compile(r"SEGUNDA.{0,10}SEXTA", re.IGNORECASE), 5),
     (re.compile(r"\b6\s*[xX]\s*1\b"), 6),
     (re.compile(r"\b5\s*[xX]\s*2\b"), 5),
+    (re.compile(r"\b12\s*[xX]\s*36\b"), 3.5),
 ]
+
+_PADRAO_ESCALA_12X36 = re.compile(r"\b12\s*[xX]\s*36\b")
 
 
 def _extrair_intervalos_de_hora(texto: str) -> list[tuple[int, int]]:
@@ -132,7 +147,7 @@ def _fmt_hora(minutos: int) -> str:
     return f"{(minutos // 60) % 24:02d}:{minutos % 60:02d}"
 
 
-def _dias_por_semana(escala_texto: str) -> int | None:
+def _dias_por_semana(escala_texto: str) -> float | None:
     if not escala_texto:
         return None
     for padrao, dias in _MAPA_ESCALA_DIAS:
@@ -207,6 +222,77 @@ def determinar_limites_por_contrato(contrato_texto, cargo_texto) -> dict:
     }
 
 
+# Tolerância pro plantão 12x36: presença esperada é 12h. Aceita uma faixa (11h-13h) porque plantão
+# real varia um pouco de horário de troca — o que importa é confirmar o padrão, não exigir 12h00min
+# cravado. Fora dessa faixa, não é mais "confere com 12x36", é pendência de verdade.
+_TOLERANCIA_12X36_MIN = (11 * 60, 13 * 60)
+
+
+def _calcular_jornada_12x36(horario_texto: str, pausa_texto: str, escala_texto: str) -> dict:
+    intervalos = _extrair_intervalos_de_hora(horario_texto)
+    if len(intervalos) != 1:
+        return {
+            "aplica_checagem": True,
+            "calculado": False,
+            "horas_semanais": None,
+            "horas_mensais": None,
+            "dentro_do_limite": None,
+            "motivo": (
+                "nenhum horário reconhecido no texto do plantão 12x36"
+                if not intervalos
+                else f"{len(intervalos)} horários diferentes no texto — não é um plantão só"
+            ),
+            "detalhe": f"Horário: {horario_texto!r} / Escala: {escala_texto!r}",
+        }
+
+    inicio, fim = intervalos[0]
+    turno_bruto = _duracao_minutos(inicio, fim)
+
+    if not (_TOLERANCIA_12X36_MIN[0] <= turno_bruto <= _TOLERANCIA_12X36_MIN[1]):
+        return {
+            "aplica_checagem": True,
+            "calculado": False,
+            "horas_semanais": None,
+            "horas_mensais": None,
+            "dentro_do_limite": False,
+            "motivo": (
+                f"plantão de {turno_bruto / 60:.2f}h não bate com o padrão 12x36 (esperado ~12h de "
+                f"presença) — confira manualmente"
+            ),
+            "detalhe": f"Horário: {horario_texto!r} / Escala: {escala_texto!r}",
+        }
+
+    pausa_min = _pausa_minutos(pausa_texto)
+    if pausa_min is None:
+        pausa_min = 60  # padrão legal do intervalo em plantão 12x36, se o texto não deu pra ler
+
+    minutos_efetivos = turno_bruto - pausa_min
+    horas_efetivas = round(minutos_efetivos / 60, 2)
+
+    return {
+        "aplica_checagem": True,
+        "calculado": True,
+        "horas_semanais": LIMITE_12X36_SEMANAL,
+        "horas_mensais": round(LIMITE_12X36_SEMANAL * SEMANAS_POR_MES, 2),
+        "limite_semanal": LIMITE_12X36_SEMANAL,
+        "limite_mensal": LIMITE_12X36_MENSAL,
+        "dentro_do_limite": True,
+        "motivo": "",
+        "explicacao_turnos": (
+            f"{_fmt_hora(inicio)} às {_fmt_hora(fim)} (plantão 12h, {horas_efetivas}h efetivas "
+            f"descontada a pausa) — média de 3,5 plantões/semana (ciclo 4 semana A + 3 semana B)"
+        ),
+        "detalhe": (
+            f"Plantão {_fmt_hora(inicio)} às {_fmt_hora(fim)} confere com o padrão 12x36 "
+            f"({horas_efetivas}h efetivas). Referência (CLT art. 59-A): 38,5h/semana em média, "
+            f"180h/mês é o divisor de folha (não um teto de horas trabalhadas — {LIMITE_12X36_SEMANAL} "
+            f"x {SEMANAS_POR_MES} = {LIMITE_12X36_SEMANAL * SEMANAS_POR_MES}h/mês seria a média real, "
+            f"maior que o divisor, e isso é esperado, não pendência). "
+            f"Horário: {horario_texto!r}, Pausa: {pausa_texto!r}, Escala: {escala_texto!r}"
+        ),
+    }
+
+
 def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=None, cargo_texto=None) -> dict:
     """
     Devolve:
@@ -233,6 +319,14 @@ def calcular_jornada(horario_texto, pausa_texto, escala_texto, contrato_texto=No
         }
     limite_semanal = limites["limite_semanal"]
     limite_mensal = limites["limite_mensal"]
+
+    # 12x36 não é "calcule o total e compare com um teto" — é "confira se o plantão bate com o padrão
+    # legal (12h de presença, 1h de intervalo)". Achado testando com dado real (Roberto Ferraz
+    # Dionisio, 2026-08-20): comparar a média real (192,5h/mês) contra o divisor de folha (180h/mês)
+    # dava falso positivo de "acima do limite" — são duas contas diferentes, não a mesma conta com
+    # nomes diferentes (mesmo erro conceitual do 220h padrão, só que pro 12x36). Ver função dedicada.
+    if _PADRAO_ESCALA_12X36.search(escala_texto) and limite_semanal == LIMITE_SEMANAL_HORAS:
+        return _calcular_jornada_12x36(horario_texto, pausa_texto, escala_texto)
 
     dias = _dias_por_semana(escala_texto)
     if dias is None:

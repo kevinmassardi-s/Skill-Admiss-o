@@ -130,12 +130,13 @@ Pedido do Kevin (2026-08-12): conferir automaticamente jornada semanal/mensal, s
 passar do limite. O limite **não é sempre 44h/220h** — depende do `CONTRATO:` (e, pro caso do
 aprendiz, do texto do `CARGO:`). Ver `references/base-legal.md` pra pesquisa completa com fonte.
 
-| Contrato | Limite | Observação |
+| Contrato/escala | Limite | Observação |
 |---|---|---|
 | CLT padrão / horista | 44h semana / 220h mês | Regra geral (CF art. 7º XIII) |
 | ESTÁGIO | 30h semana / 150h mês | Lei 11.788/2008 — nunca hora extra |
 | ESTÁGIO + cargo com "APRENDIZ" | 6h/dia (30h semana) | Lei 10.097/2000 — nunca hora extra, checado à parte |
 | INTERMITENTE | **sem checagem** | CLT art. 452-A não define teto agregado |
+| Escala **12x36** | confere o padrão (12h presença), não soma contra teto | Ver seção própria abaixo — 180h/mês é divisor, não teto |
 
 Quando o texto do horário não segue um padrão reconhecido com confiança (mais de um horário no texto,
 escala não mapeada, pausa ambígua), a skill **não calcula um número** — vira pendência de "não
@@ -145,6 +146,26 @@ tudo bem".
 
 Tempo parcial e teletrabalho sem controle de jornada têm limites próprios (ver base-legal.md) mas não
 são detectáveis pelos campos deste formulário — limitação conhecida, não implementada.
+
+## Escala 12x36 — confere o padrão, não soma contra um teto
+
+**Achado real (2026-08-20).** Diferente dos outros casos, 12x36 não é "some as horas da semana e
+compare com um limite" — é "confira se o plantão bate com o padrão legal" (12h de presença, 1h de
+intervalo obrigatório = 11h efetivas, alternando 4 e 3 plantões por semana). Guia de referência trazido
+por Kevin (fonte: documento gerado por IA a partir do art. 59-A da CLT e Súmula do TST — não veio de
+pesquisa própria desta vez, registrado aqui pra rastreabilidade, vale revalidar com fonte oficial se um
+dia isso virar ponto de dúvida real).
+
+Tentei primeiro comparar a média mensal real (3,5 plantões x 11h x 5 semanas = **192,5h/mês**) contra o
+divisor de folha (**180h/mês**) — deu "ACIMA DO LIMITE" pra um plantão perfeitamente normal, porque
+**180h é o divisor usado pra calcular o valor da hora, não um teto de horas trabalhadas** (mesmo erro
+conceitual do 220h padrão, ver seção "220h/mês não é teto legal" acima).
+
+**Regra corrigida:** a skill confere se o plantão (texto do horário) bate com ~12h de presença
+(tolerância 11h-13h, pra admitir variação de horário de troca) e se tem 1h de intervalo. Se bater,
+é **sempre "dentro"**, independente da conta de 192,5h — porque o padrão em si já é o que a lei
+autoriza. Se o plantão não bater com ~12h, isso sim é pendência real ("plantão de Xh não bate com o
+padrão 12x36 — confira manualmente").
 
 ## Formato do resumo "pronto para digitar"
 
